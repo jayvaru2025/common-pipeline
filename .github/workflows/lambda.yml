@@ -1,0 +1,139 @@
+name: AWS Lambda Deployment
+
+on:
+  workflow_call:
+    inputs:
+      AWS_REGION:
+        required: true
+        type: string
+      REGION_PREFIX:
+        required: true
+        type: string
+      FUNCTION_DIR:
+        required: true
+        type: string
+      ENV:
+        required: true
+        type: string
+      LAMBDA_FUNCTION_NAME:
+        required: true
+        type: string
+    secrets:
+      REPO_ACCESS_TOKEN_:
+        required: true
+
+runs-on: ubuntu-22.04
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  auth:
+    environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Debug Inputs
+        run: |
+          echo "ENV: ${{ inputs.ENV }}"
+          echo "AWS_REGION: ${{ inputs.AWS_REGION }}"
+          echo "LAMBDA_FUNCTION_NAME: ${{ inputs.LAMBDA_FUNCTION_NAME }}"
+          echo "FUNCTION_DIR: ${{ inputs.FUNCTION_DIR }}"
+
+      - name: Set Account Number
+        id: set-account
+        run: |
+          echo "AWS_ACCOUNT_ID=${{ vars.AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ vars.DEPLOYMENT_ROLE }}
+          role-session-name: GitHubActionsOIDCSession
+          aws-region: ${{ inputs.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+  build:
+    environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
+    needs: auth
+    steps:
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN_ }}
+
+      - name: Verify Function Directory
+        run: |
+          ls -la ${{ inputs.FUNCTION_DIR }}
+          if [ ! -d "${{ inputs.FUNCTION_DIR }}" ]; then
+            echo "Error: Directory ${{ inputs.FUNCTION_DIR }} does not exist"
+            exit 1
+          fi
+
+      - name: Zip Lambda Function Files
+        working-directory: ${{ inputs.FUNCTION_DIR }}
+        run: |
+          mkdir -p ../artifacts/function
+          zip -r ../artifacts/function/lambda.zip .
+          ls -la ../artifacts/function
+
+      - name: Upload Lambda Zip Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-zip
+          path: artifacts/function/lambda.zip
+          retention-days: 1
+
+  deploy:
+    environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
+    needs: [auth, build]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.ref }}
+          token: ${{ secrets.REPO_ACCESS_TOKEN_ }}
+
+      - name: Set Account Number
+        run: |
+          echo "AWS_ACCOUNT_ID=${{ vars.AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ vars.DEPLOYMENT_ROLE }}
+          role-session-name: GitHubActionsOIDCSession
+          aws-region: ${{ inputs.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Download Lambda Zip Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-zip
+          path: artifacts/function
+
+      - name: Deploy Lambda Function
+        run: |
+          echo "Updating Lambda function code..."
+          if [ -z "${{ inputs.LAMBDA_FUNCTION_NAME }}" ]; then
+            echo "Error: LAMBDA_FUNCTION_NAME is not set"
+            exit 1
+          fi
+          if [[ -f artifacts/function/lambda.zip ]]; then
+            aws lambda update-function-code \
+              --function-name "${{ inputs.LAMBDA_FUNCTION_NAME }}" \
+              --zip-file fileb://artifacts/function/lambda.zip \
+              --region "${{ inputs.AWS_REGION }}"
+          else
+            echo "Error: Lambda zip file not found"
+            exit 1
+          fi
+          echo "Lambda function deployment complete."
