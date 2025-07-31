@@ -27,9 +27,9 @@ permissions:
   contents: read
 
 jobs:
-  auth:
+  build:
     runs-on: ubuntu-22.04
-    environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
+    environment: ${{ inputs.ENV }}
     permissions:
       id-token: write
       contents: read
@@ -54,11 +54,6 @@ jobs:
           aws-region: ${{ inputs.AWS_REGION }}
           audience: sts.amazonaws.com
 
-  build:
-    runs-on: ubuntu-22.04
-    environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
-    needs: auth
-    steps:
       - name: Checkout Source Repository
         uses: actions/checkout@v4
         with:
@@ -90,8 +85,8 @@ jobs:
 
   deploy:
     runs-on: ubuntu-22.04
-    environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
-    needs: [auth, build]
+    environment: ${{ inputs.ENV }}
+    needs: build
     permissions:
       id-token: write
       contents: read
