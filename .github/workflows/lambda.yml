@@ -22,14 +22,13 @@ on:
       REPO_ACCESS_TOKEN_:
         required: true
 
-runs-on: ubuntu-22.04
-
 permissions:
   id-token: write
   contents: read
 
 jobs:
   auth:
+    runs-on: ubuntu-22.04
     environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
     permissions:
       id-token: write
@@ -56,6 +55,7 @@ jobs:
           audience: sts.amazonaws.com
 
   build:
+    runs-on: ubuntu-22.04
     environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
     needs: auth
     steps:
@@ -89,6 +89,7 @@ jobs:
           retention-days: 1
 
   deploy:
+    runs-on: ubuntu-22.04
     environment: ${{ inputs.ENV }}  # Assign environment based on ENV input
     needs: [auth, build]
     permissions:
