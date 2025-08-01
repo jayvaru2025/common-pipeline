@@ -102,7 +102,6 @@ jobs:
     name: OpenTofu Apply
     runs-on: ubuntu-22.04
     environment: ${{ inputs.CI_ENVIRONMENT_NAME }}
-    environment: ${{ inputs.CI_ENVIRONMENT_NAME }}
     needs: plan
     steps:
       - name: Checkout Repository
