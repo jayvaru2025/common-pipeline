@@ -32,6 +32,7 @@ jobs:
   plan:
     name: OpenTofu Plan
     runs-on: ubuntu-22.04
+    environment: ${{ inputs.CI_ENVIRONMENT_NAME }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -100,6 +101,7 @@ jobs:
   apply:
     name: OpenTofu Apply
     runs-on: ubuntu-22.04
+    environment: ${{ inputs.CI_ENVIRONMENT_NAME }}
     environment: ${{ inputs.CI_ENVIRONMENT_NAME }}
     needs: plan
     steps:
